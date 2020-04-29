@@ -7,6 +7,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -20,8 +21,8 @@ const (
 
 var exts = []string{"gif", "jpeg", "png"}
 
-// ConvertImage は変換対象画像ファイル情報です
-type ConvertImage struct {
+// Image は変換対象画像ファイル情報です
+type Image struct {
 	File        *os.File
 	FilePath    string
 	Image       image.Image
@@ -29,7 +30,10 @@ type ConvertImage struct {
 }
 
 // ConvertImages は変換対象画像ファイル情報スライスです
-type ConvertImages []*ConvertImage
+//type ConvertImages []*Image
+type ConvertImages struct {
+	cImages []convertImage
+}
 
 func Convert(dir, bExt, aExt string) error {
 	if dir == "" {
@@ -49,11 +53,11 @@ func Convert(dir, bExt, aExt string) error {
 
 	}
 
-	cis, err := getTargetImages(dir, bExt)
+	cis, err := getTargetImages(dir, bExt, aExt)
 	if err != nil {
 		return err
 	}
-	err = cis.ConvertImagesFromTo(bExt, aExt)
+	err = cis.ConvertImagesTo()
 	if err != nil {
 		return err
 	}
@@ -71,109 +75,94 @@ func contains(s []string, e string) bool {
 }
 
 // getFileNameWithoutExt は拡張子なしのファイル名を返却します
-func (ci *ConvertImage) getFileNameWithoutExt() string {
+func (ci *Image) getFileNameWithoutExt() string {
 	p := ci.FilePath
 	return p[:len(p)-len(filepath.Ext(p))]
 }
 
-// convertImageToGif は画像形式をGIFに変換します
-func (ci *ConvertImage) convertImageToGif() error {
-	np := ci.getFileNameWithoutExt() + "." + ExtGif
+type convertImage interface {
+	Type() string
+	getConvertFn() func(w io.Writer, m image.Image) error
+	getImage() *Image
+}
+type cGif struct {
+	image *Image
+}
+
+func (c *cGif) Type() string {
+	return ExtGif
+}
+func (c *cGif) getImage() *Image {
+	return c.image
+}
+func (c *cGif) getConvertFn() func(io.Writer, image.Image) error {
+	return func(nf io.Writer, ci image.Image) error {
+		return gif.Encode(nf, ci, nil)
+	}
+}
+
+type cJepg struct {
+	image *Image
+}
+
+func (c *cJepg) Type() string {
+	return ExtJpeg
+}
+func (c *cJepg) getConvertFn() func(io.Writer, image.Image) error {
+	return func(nf io.Writer, ci image.Image) error {
+		return jpeg.Encode(nf, ci, nil)
+	}
+}
+func (c *cJepg) getImage() *Image {
+	return c.image
+}
+
+type cPng struct {
+	image *Image
+}
+
+func (c *cPng) Type() string {
+	return ExtPng
+}
+func (c *cPng) getConvertFn() func(io.Writer, image.Image) error {
+	return func(nf io.Writer, ci image.Image) error {
+		return png.Encode(nf, ci)
+	}
+}
+func (c *cPng) getImage() *Image {
+	return c.image
+}
+
+func convert(ce convertImage) error {
+	ci := ce.getImage()
+	np := ci.getFileNameWithoutExt() + "." + ce.Type()
 	nf, err := os.Create(np)
 	if err != nil {
 		return err
 	}
 
-	err = gif.Encode(nf, ci.Image, nil)
+	fn := ce.getConvertFn()
+	err = fn(nf, ci.Image)
 	if err != nil {
 		return err
 	}
 
 	bp := ci.FilePath
 
-	ci.File, ci.FilePath, ci.ImageFormat = nf, np, ExtGif
+	ci.File, ci.FilePath, ci.ImageFormat = nf, np, ce.Type()
 
 	if err := os.Remove(bp); err != nil {
 		return err
 	}
 
-	fmt.Printf("%sの画像形式を%s(%s)に変更しました。", bp, ExtGif, np)
+	fmt.Printf("%sの画像形式を%s(%s)に変更しました。", bp, ce.Type(), np)
 
 	return nil
 }
 
-// convertImageToJpeg は画像形式をJPEFに変換します
-func (ci *ConvertImage) convertImageToJpeg() error {
-	np := ci.getFileNameWithoutExt() + "." + ExtJpeg
-	nf, err := os.Create(np)
-	if err != nil {
-		return err
-	}
-
-	err = jpeg.Encode(nf, ci.Image, nil)
-	if err != nil {
-		return err
-	}
-
-	bp := ci.FilePath
-
-	ci.File, ci.FilePath, ci.ImageFormat = nf, np, ExtJpeg
-
-	if err := os.Remove(bp); err != nil {
-		return err
-	}
-
-	fmt.Printf("%sの画像形式を%s(%s)に変更しました。", bp, ExtJpeg, np)
-
-	return nil
-}
-
-// convertImageToPng は画像形式をPNGに変換します
-func (ci *ConvertImage) convertImageToPng() error {
-	np := ci.getFileNameWithoutExt() + "." + ExtPng
-	nf, err := os.Create(np)
-	if err != nil {
-		return err
-	}
-
-	err = png.Encode(nf, ci.Image)
-	if err != nil {
-		return err
-	}
-
-	bp := ci.FilePath
-
-	ci.File, ci.FilePath, ci.ImageFormat = nf, np, ExtPng
-
-	if err := os.Remove(bp); err != nil {
-		return err
-	}
-
-	fmt.Printf("%sの画像形式を%s(%s)に変更しました。", bp, ExtPng, np)
-
-	return nil
-}
-
-// ConvertImageTo は画像を指定された画像形式に変換します
-func (ci *ConvertImage) ConvertImageTo(fmt string) (err error) {
-	switch fmt {
-	case ExtGif:
-		err = ci.convertImageToGif()
-	case ExtJpeg:
-		err = ci.convertImageToJpeg()
-	case ExtPng:
-		err = ci.convertImageToPng()
-	default:
-		err = errors.New("指定されたフォーマットは対応していません")
-	}
-
-	return
-}
-
-// ConvertImagesTo はConvertImagesに含まれる画像を指定された画像形式の画像に変換します
-func (cis ConvertImages) ConvertImagesTo(fmt string) (err error) {
-	for _, v := range cis {
-		err = v.ConvertImageTo(fmt)
+func (cis ConvertImages) ConvertImagesTo() (err error) {
+	for _, v := range cis.cImages {
+		err = convert(v)
 		if err != nil {
 			return err
 		}
@@ -182,16 +171,7 @@ func (cis ConvertImages) ConvertImagesTo(fmt string) (err error) {
 	return
 }
 
-// ConvertImagesFromTo はConvertImagesに含まれる指定された画像形式の画像を指定された画像形式の画像に変換します
-func (cis ConvertImages) ConvertImagesFromTo(b string, a string) error {
-
-	err := cis.ConvertImagesTo(a)
-
-	return err
-}
-
-// NewConvertImage は指定されたファイルから生成したConvertImageを返却します。
-func NewConvertImage(p string) (ci *ConvertImage, err error) {
+func NewConvertImage(p, aExt string) (ci convertImage, err error) {
 
 	f, err := os.Open(p)
 	if err != nil {
@@ -204,23 +184,32 @@ func NewConvertImage(p string) (ci *ConvertImage, err error) {
 		return
 	}
 
-	ci = &ConvertImage{File: f, FilePath: p, Image: img, ImageFormat: fmt}
+	i := &Image{File: f, FilePath: p, Image: img, ImageFormat: fmt}
+	switch aExt {
+	case ExtGif:
+		return &cGif{image: i}, nil
+	case ExtJpeg:
+		return &cJepg{image: i}, nil
+	case ExtPng:
+		return &cPng{image: i}, nil
+	default:
+		err = errors.New("指定されたフォーマットは対応していません")
+	}
 
 	return
 }
 
-// NewConvertImagesByDir は指定されたディレクトリに含まれる画像ファイルから生成したImageFileのスライスを返却します。
-func getTargetImages(dir, tExt string) (ConvertImages, error) {
-	cis := ConvertImages{}
+func getTargetImages(dir, tExt, aExt string) (*ConvertImages, error) {
+	cis := &ConvertImages{}
 
 	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			if ok, _ := isTargetImage(p, tExt); ok {
-				ci, err := NewConvertImage(p)
+				ci, err := NewConvertImage(p, aExt)
 				if err != nil {
 					return err
 				}
-				cis = append(cis, ci)
+				cis.cImages = append(cis.cImages, ci)
 			}
 		}
 		return nil
@@ -232,7 +221,6 @@ func getTargetImages(dir, tExt string) (ConvertImages, error) {
 	return cis, nil
 }
 
-// isImage はファイルパスからそのファイルが画像か判定します
 func isTargetImage(p, tExt string) (ok bool, err error) {
 	f, err := os.Open(p)
 	if err != nil {
