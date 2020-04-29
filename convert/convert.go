@@ -30,7 +30,6 @@ type Image struct {
 }
 
 // ConvertImages は変換対象画像ファイル情報スライスです
-//type ConvertImages []*Image
 type ConvertImages struct {
 	cImages []convertImage
 }
