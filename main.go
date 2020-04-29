@@ -28,13 +28,10 @@ func main() {
 		fmt.Println("対象ディレクトリを指定してください")
 		os.Exit(1)
 	}
-
-	cis, err := convert.GetTargetImages(tDir)
+	err := convert.Convert(tDir, bExt, aExt)
 	if err != nil {
 		log.Print(err)
+		return
 	}
-	err = cis.ConvertImagesFromTo(bExt, aExt)
-	if err != nil {
-		log.Print(err)
-	}
+	println("success")
 }

@@ -29,6 +29,29 @@ type ConvertImage struct {
 // ConvertImages は変換対象画像ファイル情報スライスです
 type ConvertImages []*ConvertImage
 
+func Convert(dir, bExt, aExt string) error {
+	if dir == "" {
+		return errors.New("no dir name")
+	}
+	if bExt == "" {
+		return errors.New("no b ext name")
+	}
+	if aExt == "" {
+		return errors.New("no a ext name")
+	}
+
+	cis, err := getTargetImages(dir)
+	if err != nil {
+		return err
+	}
+	err = cis.ConvertImagesFromTo(bExt, aExt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // getFileNameWithoutExt は拡張子なしのファイル名を返却します
 func (ci *ConvertImage) getFileNameWithoutExt() string {
 	p := ci.FilePath
@@ -219,27 +242,26 @@ func (cis ConvertImages) ConvertImagesFromTo(b string, a string) error {
 }
 
 // NewConvertImage は指定されたファイルから生成したConvertImageを返却します。
-func NewConvertImage(p string) (*ConvertImage, error) {
-	ci := new(ConvertImage)
+func NewConvertImage(p string) (ci *ConvertImage, err error) {
 
 	f, err := os.Open(p)
 	if err != nil {
-		return ci, err
+		return
 	}
 	defer f.Close()
 
 	img, fmt, err := image.Decode(f)
 	if err != nil {
-		return ci, err
+		return
 	}
 
-	ci.File, ci.FilePath, ci.Image, ci.ImageFormat = f, p, img, fmt
+	ci = &ConvertImage{File: f, FilePath: p, Image: img, ImageFormat: fmt}
 
-	return ci, nil
+	return
 }
 
 // NewConvertImagesByDir は指定されたディレクトリに含まれる画像ファイルから生成したImageFileのスライスを返却します。
-func GetTargetImages(dir string) (ConvertImages, error) {
+func getTargetImages(dir string) (ConvertImages, error) {
 	cis := ConvertImages{}
 
 	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
@@ -255,7 +277,7 @@ func GetTargetImages(dir string) (ConvertImages, error) {
 		return nil
 	})
 	if err != nil {
-		return cis, err
+		return nil, err
 	}
 
 	return cis, nil
