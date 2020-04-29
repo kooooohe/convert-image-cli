@@ -56,7 +56,7 @@ func Convert(dir, bExt, aExt string) error {
 	if err != nil {
 		return err
 	}
-	err = cis.ConvertImagesTo()
+	err = cis.ConvertImages()
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func convert(ce convertImage) error {
 	return nil
 }
 
-func (cis ConvertImages) ConvertImagesTo() (err error) {
+func (cis ConvertImages) ConvertImages() (err error) {
 	for _, v := range cis.cImages {
 		err = convert(v)
 		if err != nil {
