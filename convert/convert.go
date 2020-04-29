@@ -18,6 +18,8 @@ const (
 	ExtPng  = "png"
 )
 
+var exts = []string{"gif", "jpeg", "png"}
+
 // ConvertImage は変換対象画像ファイル情報です
 type ConvertImage struct {
 	File        *os.File
@@ -39,8 +41,15 @@ func Convert(dir, bExt, aExt string) error {
 	if aExt == "" {
 		return errors.New("no a ext name")
 	}
+	if !contains(exts, aExt) {
+		return errors.New("no a ext name")
+	}
+	if !contains(exts, bExt) {
+		return errors.New("no b bxt name")
 
-	cis, err := getTargetImages(dir)
+	}
+
+	cis, err := getTargetImages(dir, bExt)
 	if err != nil {
 		return err
 	}
@@ -52,25 +61,19 @@ func Convert(dir, bExt, aExt string) error {
 	return nil
 }
 
+func contains(s []string, e string) bool {
+	for _, v := range s {
+		if e == v {
+			return true
+		}
+	}
+	return false
+}
+
 // getFileNameWithoutExt は拡張子なしのファイル名を返却します
 func (ci *ConvertImage) getFileNameWithoutExt() string {
 	p := ci.FilePath
 	return p[:len(p)-len(filepath.Ext(p))]
-}
-
-// isImageGif は画像形式がGIFか判定します
-func (ci *ConvertImage) isImageGif() bool {
-	return ci.ImageFormat == ExtGif
-}
-
-// isImageJpeg は画像形式がJPEGか判定します
-func (ci *ConvertImage) isImageJpeg() bool {
-	return ci.ImageFormat == ExtJpeg
-}
-
-// isImagePng は画像形式がPNGか判定します
-func (ci *ConvertImage) isImagePng() bool {
-	return ci.ImageFormat == ExtPng
 }
 
 // convertImageToGif は画像形式をGIFに変換します
@@ -167,56 +170,6 @@ func (ci *ConvertImage) ConvertImageTo(fmt string) (err error) {
 	return
 }
 
-// getOnlyImageGif はConvertImagesからGIF形式のイメージを保持するConvertImageを抽出して返却します
-func (cis ConvertImages) getOnlyImageGif() (rcis ConvertImages) {
-	for _, v := range cis {
-		if v.isImageGif() {
-			rcis = append(rcis, v)
-		}
-	}
-
-	return rcis
-}
-
-// getOnlyImageJpeg はConvertImagesからJPEG形式のイメージを保持するConvertImageを抽出して返却します
-func (cis ConvertImages) getOnlyImageJpeg() (rcis ConvertImages) {
-	for _, v := range cis {
-		if v.isImageJpeg() {
-			rcis = append(rcis, v)
-		}
-	}
-
-	return rcis
-}
-
-// GetOnlyImagePng はConvertImagesからPNG形式のイメージを保持するConvertImageを抽出して返却します
-func (cis ConvertImages) getOnlyImagePng() (rcis ConvertImages) {
-	for _, v := range cis {
-		if v.isImagePng() {
-			rcis = append(rcis, v)
-		}
-	}
-
-	return rcis
-}
-
-// GetOnly はConvertImagesから指定された画像形式のイメージを保持するConvertImageを抽出して返却します
-func (cis ConvertImages) GetOnly(fmt string) (ConvertImages, error) {
-	rcis := ConvertImages{}
-	switch fmt {
-	case ExtGif:
-		rcis = cis.getOnlyImageGif()
-	case ExtJpeg:
-		rcis = cis.getOnlyImageJpeg()
-	case ExtPng:
-		rcis = cis.getOnlyImagePng()
-	default:
-		return rcis, errors.New("指定されたフォーマットは対応していません")
-	}
-
-	return rcis, nil
-}
-
 // ConvertImagesTo はConvertImagesに含まれる画像を指定された画像形式の画像に変換します
 func (cis ConvertImages) ConvertImagesTo(fmt string) (err error) {
 	for _, v := range cis {
@@ -231,12 +184,8 @@ func (cis ConvertImages) ConvertImagesTo(fmt string) (err error) {
 
 // ConvertImagesFromTo はConvertImagesに含まれる指定された画像形式の画像を指定された画像形式の画像に変換します
 func (cis ConvertImages) ConvertImagesFromTo(b string, a string) error {
-	rcis, err := cis.GetOnly(b)
-	if err != nil {
-		return err
-	}
 
-	err = rcis.ConvertImagesTo(a)
+	err := cis.ConvertImagesTo(a)
 
 	return err
 }
@@ -261,12 +210,12 @@ func NewConvertImage(p string) (ci *ConvertImage, err error) {
 }
 
 // NewConvertImagesByDir は指定されたディレクトリに含まれる画像ファイルから生成したImageFileのスライスを返却します。
-func getTargetImages(dir string) (ConvertImages, error) {
+func getTargetImages(dir, tExt string) (ConvertImages, error) {
 	cis := ConvertImages{}
 
 	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
-			if ok, _ := isImage(p); ok {
+			if ok, _ := isTargetImage(p, tExt); ok {
 				ci, err := NewConvertImage(p)
 				if err != nil {
 					return err
@@ -284,16 +233,18 @@ func getTargetImages(dir string) (ConvertImages, error) {
 }
 
 // isImage はファイルパスからそのファイルが画像か判定します
-func isImage(p string) (bool, error) {
+func isTargetImage(p, tExt string) (ok bool, err error) {
 	f, err := os.Open(p)
 	if err != nil {
-		return false, err
+		return
 	}
 	defer f.Close()
 
-	if _, _, err := image.Decode(f); err != nil {
-		return false, err
+	_, fmt, err := image.Decode(f)
+	if err != nil {
+		return
 	}
 
-	return true, nil
+	ok = fmt == tExt
+	return
 }
