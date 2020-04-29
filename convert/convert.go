@@ -239,7 +239,7 @@ func NewConvertImage(p string) (*ConvertImage, error) {
 }
 
 // NewConvertImagesByDir は指定されたディレクトリに含まれる画像ファイルから生成したImageFileのスライスを返却します。
-func NewConvertImagesByDir(dir string) (ConvertImages, error) {
+func GetTargetImages(dir string) (ConvertImages, error) {
 	cis := ConvertImages{}
 
 	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {

@@ -10,31 +10,31 @@ import (
 )
 
 var (
-	b string
-	a string
+	tDir string
+	bExt string
+	aExt string
 )
 
 func init() {
-	flag.StringVar(&b, "b", convert.ExtJpeg, "変換前画像形式")
-	flag.StringVar(&a, "a", convert.ExtPng, "変換後画像形式")
+	flag.StringVar(&tDir, "dir", "", "Target Dir")
+	flag.StringVar(&bExt, "bExt", convert.ExtJpeg, "変換前画像形式")
+	flag.StringVar(&aExt, "aExt", convert.ExtPng, "変換後画像形式")
 }
 
 func main() {
 	flag.Parse()
 
-	if len(flag.Args()) < 1 {
+	if tDir == "" {
 		fmt.Println("対象ディレクトリを指定してください")
 		os.Exit(1)
 	}
 
-	for _, dir := range flag.Args() {
-		cis, err := convert.NewConvertImagesByDir(dir)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = cis.ConvertImagesFromTo(b, a)
-		if err != nil {
-			log.Fatal(err)
-		}
+	cis, err := convert.GetTargetImages(tDir)
+	if err != nil {
+		log.Print(err)
+	}
+	err = cis.ConvertImagesFromTo(bExt, aExt)
+	if err != nil {
+		log.Print(err)
 	}
 }
